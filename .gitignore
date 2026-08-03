@@ -1,0 +1,19 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+cache/
+logs/
+last_run.json
+
+incidents_itop_model.xlsx
+incidents_itop_clean.xlsx
+Export de Incidents -Maintenance & supports.xlsx
+*.xlsx
+*.xls
+
+*.log
