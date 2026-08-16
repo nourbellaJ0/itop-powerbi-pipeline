@@ -148,6 +148,13 @@ class Config:
     monetique_ai_enabled: bool             # Flag maître dédié — défaut False
     monetique_confidence_threshold: float  # Seuil de reporting uniquement (pas de repli regex)
 
+    # ── Retour de statut d'exécution (liste SharePoint) ─────────────────────────
+    # Nom de la liste SharePoint où écrire En cours / OK / Erreur. Optionnel :
+    # si vide, l'écriture de statut est ignorée (par défaut = ""). Ajouté en fin
+    # de dataclass avec valeur par défaut pour ne pas casser les Config(...)
+    # existants (positionnels ou nommés) dans les tests.
+    run_status_list_name: str = ""
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Fonction principale de chargement
@@ -276,4 +283,7 @@ def load_config() -> Config:
         monetique_confidence_threshold=float(
             _optional("MONETIQUE_CONFIDENCE_THRESHOLD", "0.6") or 0.6
         ),
+
+        # Retour de statut d'exécution
+        run_status_list_name=_optional("SHAREPOINT_STATUS_LIST_NAME", ""),
     )
