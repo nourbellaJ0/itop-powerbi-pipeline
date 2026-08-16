@@ -48,6 +48,25 @@ Copie `.env.example` vers `.env`, puis renseigne les variables de connexion iTop
 python -m pytest tests/
 ```
 
+## Déclenchement à distance (GitHub Actions)
+
+Le workflow [`.github/workflows/run-pipeline.yml`](.github/workflows/run-pipeline.yml)
+exécute le pipeline en mode `sharepoint → sharepoint` sur demande
+(`workflow_dispatch`), ce qui permet de le déclencher depuis Power Automate
+via l'API REST GitHub :
+
+```
+POST /repos/{owner}/{repo}/actions/workflows/run-pipeline.yml/dispatches
+{ "ref": "main", "inputs": { "skip_ai": "true", "full_refresh": "false" } }
+```
+
+Toutes les valeurs sensibles sont lues depuis `secrets.*` (Settings → Secrets
+and variables → Actions) — voir l'en-tête du fichier YAML pour la liste des
+secrets attendus. Le run se termine avec un code de sortie non-zéro (donc
+visible comme échec dans Actions) si le pipeline échoue, y compris sur une
+exception non prévue. Le statut (`En cours` / `OK` / `Erreur`) est aussi
+écrit dans une liste SharePoint si `SHAREPOINT_STATUS_LIST_NAME` est défini.
+
 ## Publication GitHub
 
 La branche courante est `feature/sharepoint-source-flow`. Pour pousser les changements :

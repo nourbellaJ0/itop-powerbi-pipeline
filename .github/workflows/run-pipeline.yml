@@ -1,0 +1,108 @@
+name: Run iTop → Power BI Pipeline
+
+# Déclenché à distance (workflow_dispatch) — typiquement appelé par Power
+# Automate via l'API REST GitHub :
+#   POST /repos/{owner}/{repo}/actions/workflows/run-pipeline.yml/dispatches
+# avec un body { "ref": "main", "inputs": { ... } }.
+#
+# Mode fixe : sharepoint → sharepoint (téléchargement du fichier source
+# SharePoint, ETL, dépôt du classeur final dans SharePoint). Les autres
+# options CLI exposées ci-dessous sont mappées sur les inputs.
+on:
+  workflow_dispatch:
+    inputs:
+      skip_ai:
+        description: "Ignorer l'enrichissement IA (UC1 + Monétique) pour ce run"
+        type: boolean
+        required: false
+        default: true
+      full_refresh:
+        description: "Ignorer last_run.json (mode API uniquement — sans effet ici, mode sharepoint→sharepoint)"
+        type: boolean
+        required: false
+        default: false
+      dry_run:
+        description: "Génère le classeur localement sans le déposer sur SharePoint (pour tester le déclenchement)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Evite deux exécutions concurrentes qui déposeraient le même fichier
+  # SharePoint en même temps.
+  group: itop-powerbi-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline (sharepoint → sharepoint)
+        env:
+          # ── SharePoint (Graph API) — auth + emplacement source/destination ──
+          SHAREPOINT_TENANT_ID: ${{ secrets.SHAREPOINT_TENANT_ID }}
+          SHAREPOINT_CLIENT_ID: ${{ secrets.SHAREPOINT_CLIENT_ID }}
+          SHAREPOINT_CLIENT_SECRET: ${{ secrets.SHAREPOINT_CLIENT_SECRET }}
+          SHAREPOINT_SITE_ID: ${{ secrets.SHAREPOINT_SITE_ID }}
+          SHAREPOINT_DRIVE_ID: ${{ secrets.SHAREPOINT_DRIVE_ID }}
+          SHAREPOINT_FOLDER_PATH: ${{ secrets.SHAREPOINT_FOLDER_PATH }}
+          SHAREPOINT_SOURCE_FILE_NAME: ${{ secrets.SHAREPOINT_SOURCE_FILE_NAME }}
+          # Optionnel — nom de la liste SharePoint de retour de statut
+          # (En cours / OK / Erreur). Laisser le secret vide pour désactiver.
+          SHAREPOINT_STATUS_LIST_NAME: ${{ secrets.SHAREPOINT_STATUS_LIST_NAME }}
+
+          # ── Sécurité / PII ──────────────────────────────────────────────────
+          PII_SALT: ${{ secrets.PII_SALT }}
+          INCLUDE_AGENT_NAME: ${{ secrets.INCLUDE_AGENT_NAME }}
+
+          # ── Export ────────────────────────────────────────────────────────
+          MODEL_EXPORT_FILE: ${{ secrets.MODEL_EXPORT_FILE }}
+          EXPORT_FILE: ${{ secrets.EXPORT_FILE }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+
+          # ── Enrichissement IA (Groq) — optionnel, ignoré si skip_ai=true ────
+          AI_ENRICHMENT_ENABLED: ${{ secrets.AI_ENRICHMENT_ENABLED }}
+          MONETIQUE_AI_ENABLED: ${{ secrets.MONETIQUE_AI_ENABLED }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
+          GROQ_MODEL_SUMMARY: ${{ secrets.GROQ_MODEL_SUMMARY }}
+        run: |
+          ARGS="--input sharepoint --output sharepoint"
+
+          if [ "${{ inputs.skip_ai }}" = "true" ]; then
+            ARGS="$ARGS --skip-ai"
+          fi
+          if [ "${{ inputs.full_refresh }}" = "true" ]; then
+            ARGS="$ARGS --full-refresh"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+
+          echo "Running: python main.py $ARGS"
+          python main.py $ARGS
+
+      - name: Upload run logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs
+          path: logs/
+          retention-days: 14
+          if-no-files-found: ignore
