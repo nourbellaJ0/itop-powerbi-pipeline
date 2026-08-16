@@ -9,7 +9,9 @@ name: Run iTop → Power BI Pipeline
 #
 # 2. schedule — cron toutes les 2 heures (heure UTC). Un run planifié n'a pas
 #    d'"inputs" (propres à workflow_dispatch) : il retombe sur les mêmes
-#    valeurs par défaut que le déclenchement manuel (skip_ai=true par défaut).
+#    valeurs par défaut que le déclenchement manuel (skip_ai=false, donc IA +
+#    Monétique actifs si AI_ENRICHMENT_ENABLED / MONETIQUE_AI_ENABLED = True
+#    côté secrets — voir plus bas).
 #
 # Mode fixe : sharepoint → sharepoint (téléchargement du fichier source
 # SharePoint, ETL, dépôt du classeur final dans SharePoint). Les autres
@@ -21,7 +23,7 @@ on:
         description: "Ignorer l'enrichissement IA (UC1 + Monétique) pour ce run"
         type: boolean
         required: false
-        default: true
+        default: false
       full_refresh:
         description: "Ignorer last_run.json (mode API uniquement — sans effet ici, mode sharepoint→sharepoint)"
         type: boolean
@@ -97,7 +99,7 @@ jobs:
           # défauts que le déclenchement manuel, plutôt que de dépendre d'une
           # évaluation vide silencieuse de ${{ inputs.* }}.
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            SKIP_AI="true"
+            SKIP_AI="false"
             FULL_REFRESH="false"
             DRY_RUN="false"
           else
