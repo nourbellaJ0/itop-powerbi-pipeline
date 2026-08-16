@@ -11,7 +11,13 @@ authentification n'est créée ici.
 Colonnes attendues dans la liste SharePoint cible (noms internes de colonne) :
   - DateHeure : texte ou date/heure — horodatage UTC (ISO 8601) de l'écriture
   - Statut    : texte (ou choix) — "En cours" / "OK" / "Erreur"
-  - Message   : texte multiligne — détail de l'erreur, vide sinon
+  - Title (colonne "Titre" intégrée, présente sur toute liste SharePoint) —
+    utilisée pour le message/détail (vide pour "En cours" / "OK"). On
+    réutilise volontairement Title plutôt qu'une colonne "Message" custom :
+    une colonne créée à la main peut recevoir un nom interne différent de son
+    nom affiché (ex. observé : displayName "Message" -> nom interne réel
+    "LinkTitle", un champ système en lecture seule) — Title, lui, est
+    garanti présent et éditable sur n'importe quelle liste.
 
 Le nom de la liste est configurable via SHAREPOINT_STATUS_LIST_NAME. Si la
 variable est vide, l'écriture de statut est silencieusement ignorée : c'est
@@ -80,7 +86,9 @@ def write_run_status(cfg: Config, statut: str, message: str = "") -> None:
         "fields": {
             "DateHeure": horodatage,
             "Statut": statut,
-            "Message": message_tronque,
+            # Title = colonne "Titre" intégrée (toujours présente, toujours
+            # éditable) — voir le docstring du module pour le pourquoi.
+            "Title": message_tronque or statut,
         }
     }
 

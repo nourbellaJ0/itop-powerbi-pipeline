@@ -120,7 +120,7 @@ def test_write_run_status_posts_expected_fields(monkeypatch):
     assert captured["headers"]["Authorization"] == "Bearer fake-token"
     fields = captured["json"]["fields"]
     assert fields["Statut"] == "Erreur"
-    assert fields["Message"] == "boom"
+    assert fields["Title"] == "boom"
     assert "DateHeure" in fields
 
 
@@ -138,7 +138,7 @@ def test_write_run_status_truncates_long_message(monkeypatch):
 
     sharepoint_status.write_run_status(cfg, "Erreur", message="x" * 5000)
 
-    assert len(captured["json"]["fields"]["Message"]) == sharepoint_status._MESSAGE_MAX_LEN
+    assert len(captured["json"]["fields"]["Title"]) == sharepoint_status._MESSAGE_MAX_LEN
 
 
 def test_write_run_status_never_raises_on_auth_failure(monkeypatch):
