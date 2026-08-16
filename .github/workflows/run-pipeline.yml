@@ -66,6 +66,14 @@ jobs:
 
       - name: Run pipeline (sharepoint → sharepoint)
         env:
+          # ── Mode fixe (non sensible, donc en dur — pas un secret) ───────────
+          # load_config() lit INPUT_MODE/OUTPUT_MODE depuis l'environnement
+          # AVANT que --input/--output ne soient appliqués : sans ça, le
+          # défaut INPUT_MODE=api exige ITOP_BASE_URL/ITOP_API_TOKEN et le
+          # run échoue même si --input sharepoint est passé en CLI.
+          INPUT_MODE: sharepoint
+          OUTPUT_MODE: sharepoint
+
           # ── SharePoint (Graph API) — auth + emplacement source/destination ──
           SHAREPOINT_TENANT_ID: ${{ secrets.SHAREPOINT_TENANT_ID }}
           SHAREPOINT_CLIENT_ID: ${{ secrets.SHAREPOINT_CLIENT_ID }}
