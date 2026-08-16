@@ -64,6 +64,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Restore AI classification cache
+        # cache/ai_classifications.json est dans .gitignore : sans ce cache
+        # persistant, chaque run repart d'une VM vierge et reclassifie TOUS
+        # les tickets via Groq, ce qui mange le rate-limit (429 en rafale)
+        # et peut faire dépasser le timeout du job. restore-keys prend la
+        # dernière sauvegarde disponible ; une clé unique par run garantit
+        # qu'on resauvegarde à la fin avec les nouvelles entrées.
+        uses: actions/cache@v4
+        with:
+          path: cache/ai_classifications.json
+          key: ai-classifications-${{ github.run_id }}
+          restore-keys: |
+            ai-classifications-
+
       - name: Run pipeline (sharepoint → sharepoint)
         env:
           # ── Mode fixe (non sensible, donc en dur — pas un secret) ───────────
