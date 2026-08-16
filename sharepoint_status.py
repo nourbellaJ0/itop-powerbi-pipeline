@@ -88,8 +88,11 @@ def write_run_status(cfg: Config, statut: str, message: str = "") -> None:
         resp = requests.post(url, headers=headers, json=payload, timeout=_REQUEST_TIMEOUT)
         resp.raise_for_status()
     except requests.exceptions.HTTPError as exc:
-        status = exc.response.status_code if exc.response else "?"
-        body = exc.response.text[:300] if exc.response else ""
+        # NB: Response.__bool__() renvoie self.ok (False si status >= 400),
+        # donc "if exc.response" est systématiquement faux sur une vraie
+        # erreur HTTP — comparer explicitement à None.
+        status = exc.response.status_code if exc.response is not None else "?"
+        body = exc.response.text[:300] if exc.response is not None else ""
         logger.warning(
             f"Echec de l'écriture du statut d'exécution dans SharePoint "
             f"(liste '{list_name}', HTTP {status}) : {body}"

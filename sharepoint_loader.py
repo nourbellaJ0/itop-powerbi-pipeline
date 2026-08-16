@@ -63,7 +63,10 @@ def _get_access_token(cfg: Config) -> str:
         response = requests.post(token_url, data=payload, timeout=15)
         response.raise_for_status()
     except requests.exceptions.HTTPError as exc:
-        body = exc.response.text[:300] if exc.response else ""
+        # NB: Response.__bool__() renvoie self.ok (False si status >= 400),
+        # donc "if exc.response" est systématiquement faux sur une vraie
+        # erreur HTTP — comparer explicitement à None.
+        body = exc.response.text[:300] if exc.response is not None else ""
         raise SharePointAuthError(
             f"Echec de l'obtention du token (HTTP {exc.response.status_code}) : {body}"
         ) from exc
@@ -110,8 +113,11 @@ def _upload_simple(file_path: Path, token: str, cfg: Config) -> dict:
         resp = requests.put(url, headers=headers, data=data, timeout=_REQUEST_TIMEOUT)
         resp.raise_for_status()
     except requests.exceptions.HTTPError as exc:
-        status = exc.response.status_code if exc.response else "?"
-        body   = exc.response.text[:400] if exc.response else ""
+        # NB: Response.__bool__() renvoie self.ok (False si status >= 400),
+        # donc "if exc.response" est systématiquement faux sur une vraie
+        # erreur HTTP — comparer explicitement à None.
+        status = exc.response.status_code if exc.response is not None else "?"
+        body   = exc.response.text[:400] if exc.response is not None else ""
         if status in (401, 403):
             raise SharePointAuthError(
                 f"Accès refusé ({status}). Vérifiez les permissions Files.ReadWrite.All."
@@ -238,8 +244,11 @@ def download_from_sharepoint(remote_filename: str, local_filepath: str, cfg: Con
                 )
             raise SharePointError(f"Téléchargement SharePoint échoué (HTTP {status}) : {body}")
     except requests.exceptions.HTTPError as exc:
-        status = exc.response.status_code if exc.response else "?"
-        body = exc.response.text[:400] if exc.response else ""
+        # NB: Response.__bool__() renvoie self.ok (False si status >= 400),
+        # donc "if exc.response" est systématiquement faux sur une vraie
+        # erreur HTTP — comparer explicitement à None.
+        status = exc.response.status_code if exc.response is not None else "?"
+        body = exc.response.text[:400] if exc.response is not None else ""
         if status in (401, 403):
             raise SharePointAuthError(
                 f"Accès refusé ({status}). Vérifiez les permissions Files.ReadWrite.All."
