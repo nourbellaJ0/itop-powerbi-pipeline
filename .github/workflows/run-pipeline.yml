@@ -1,9 +1,15 @@
 name: Run iTop → Power BI Pipeline
 
-# Déclenché à distance (workflow_dispatch) — typiquement appelé par Power
-# Automate via l'API REST GitHub :
-#   POST /repos/{owner}/{repo}/actions/workflows/run-pipeline.yml/dispatches
-# avec un body { "ref": "main", "inputs": { ... } }.
+# Deux déclencheurs :
+#
+# 1. workflow_dispatch — déclenché à distance, typiquement par Power Automate
+#    via l'API REST GitHub :
+#      POST /repos/{owner}/{repo}/actions/workflows/run-pipeline.yml/dispatches
+#      avec un body { "ref": "main", "inputs": { ... } }.
+#
+# 2. schedule — cron toutes les 2 heures (heure UTC). Un run planifié n'a pas
+#    d'"inputs" (propres à workflow_dispatch) : il retombe sur les mêmes
+#    valeurs par défaut que le déclenchement manuel (skip_ai=true par défaut).
 #
 # Mode fixe : sharepoint → sharepoint (téléchargement du fichier source
 # SharePoint, ETL, dépôt du classeur final dans SharePoint). Les autres
@@ -26,6 +32,9 @@ on:
         type: boolean
         required: false
         default: false
+  schedule:
+    # Toutes les 2 heures, à l'heure pile (UTC).
+    - cron: "0 */2 * * *"
 
 permissions:
   contents: read
@@ -83,18 +92,33 @@ jobs:
           GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
           GROQ_MODEL_SUMMARY: ${{ secrets.GROQ_MODEL_SUMMARY }}
         run: |
+          # Sur un run "schedule", il n'y a pas de contexte "inputs" (propre à
+          # workflow_dispatch) : on retombe explicitement sur les mêmes
+          # défauts que le déclenchement manuel, plutôt que de dépendre d'une
+          # évaluation vide silencieuse de ${{ inputs.* }}.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            SKIP_AI="true"
+            FULL_REFRESH="false"
+            DRY_RUN="false"
+          else
+            SKIP_AI="${{ inputs.skip_ai }}"
+            FULL_REFRESH="${{ inputs.full_refresh }}"
+            DRY_RUN="${{ inputs.dry_run }}"
+          fi
+
           ARGS="--input sharepoint --output sharepoint"
 
-          if [ "${{ inputs.skip_ai }}" = "true" ]; then
+          if [ "$SKIP_AI" = "true" ]; then
             ARGS="$ARGS --skip-ai"
           fi
-          if [ "${{ inputs.full_refresh }}" = "true" ]; then
+          if [ "$FULL_REFRESH" = "true" ]; then
             ARGS="$ARGS --full-refresh"
           fi
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$DRY_RUN" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
 
+          echo "Déclencheur : ${{ github.event_name }}"
           echo "Running: python main.py $ARGS"
           python main.py $ARGS
 
