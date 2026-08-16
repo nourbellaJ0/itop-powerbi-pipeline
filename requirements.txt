@@ -5,29 +5,33 @@
 #   pip install -r requirements.txt
 #
 # Python requis : 3.10 ou supérieur (utilisation de X | Y pour les unions de types)
+#
+# Versions épinglées (==) pour une CI reproductible (GitHub Actions).
+# Pour mettre à jour une version, la changer ici puis relancer les tests :
+#   python -m pytest tests/
 # ============================================================
 
 # ── Core HTTP / API ───────────────────────────────────────────────────────────
-requests>=2.31.0            # Appels HTTP vers l'API iTop et Microsoft Graph
-urllib3>=2.0.0              # Stratégie de retry HTTP (utilisée par requests)
+requests==2.32.5            # Appels HTTP vers l'API iTop, Microsoft Graph et Groq
+urllib3==2.5.0               # Stratégie de retry HTTP (utilisée par requests)
 
 # ── Data processing ───────────────────────────────────────────────────────────
-pandas>=2.1.0               # Transformation et nettoyage des données
-openpyxl>=3.1.2             # Export Excel (.xlsx) — moteur requis par pandas
+pandas==2.3.3                # Transformation et nettoyage des données
+openpyxl==3.1.5              # Export Excel (.xlsx) — moteur requis par pandas
 
 # ── Configuration / Secrets ───────────────────────────────────────────────────
-python-dotenv>=1.0.0        # Chargement des variables depuis le fichier .env
+python-dotenv==1.1.1         # Chargement des variables depuis le fichier .env (no-op si absent)
 
 # ── SQL (requis si OUTPUT_MODE=sql) ───────────────────────────────────────────
-SQLAlchemy>=2.0.0           # ORM et abstraction SQL
+SQLAlchemy==2.0.44            # ORM et abstraction SQL
 
 # Décommenter le driver adapté à votre base de données :
-# pyodbc>=5.0.0             # SQL Server via ODBC (Windows/Linux)
-# psycopg2-binary>=2.9.0   # PostgreSQL (binaire, pas de compilation)
-# psycopg2>=2.9.0          # PostgreSQL (à compiler, recommandé en production)
+# pyodbc==5.1.0              # SQL Server via ODBC (Windows/Linux)
+# psycopg2-binary==2.9.10    # PostgreSQL (binaire, pas de compilation)
+# psycopg2==2.9.10           # PostgreSQL (à compiler, recommandé en production)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
-pytest>=8.0.0               # Exécution des tests unitaires (python -m pytest tests/)
+pytest==9.1.1                 # Exécution des tests unitaires (python -m pytest tests/)
 
 # ── Notes d'installation par plateforme ───────────────────────────────────────
 # Windows — SQL Server :
