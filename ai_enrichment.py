@@ -523,10 +523,11 @@ def enrich_dataframe(
         batch_texts = to_call_texts[start:start + batch_size]
         results = _classify_batch(client, batch_texts)
         stats["n_api_calls"] += 1
+        batch_updates: dict[str, dict] = {}
         for idx, text, result in zip(batch_idx, batch_texts, results):
             reference = str(df.loc[idx].get("reference", idx))
             key = _cache_reference_key(reference)
-            cache_updates[key] = result
+            batch_updates[key] = result
             _apply_classification(df, idx, result)
             stats["n_classified"] += 1
             if result["categorie"] == _INDETERMINE:
@@ -535,11 +536,14 @@ def enrich_dataframe(
                 stats["n_high_confidence"] += 1
             stats["estimated_tokens"] += (len(text) + 200) // _CHARS_PER_TOKEN
 
-    if not dry_run and cache_updates:
-        for reference, result in cache_updates.items():
-            _set_cached_classification(cache, reference, result)
-        cache.update(cache_updates)
-        _save_cache(cache)
+        # Sauvegarde du cache après CHAQUE lot (pas seulement à la fin) : en
+        # CI, un job Groq-rate-limited peut être tué sur timeout avant la fin
+        # de la boucle — sans flush incrémental, tout le travail déjà fait en
+        # mémoire serait perdu et le prochain run repartirait de zéro.
+        if not dry_run and batch_updates:
+            cache_updates.update(batch_updates)
+            cache.update(batch_updates)
+            _save_cache(cache)
 
     n_new = len(to_call_idx)
     avg_tokens = (stats["estimated_tokens"] / n_new) if n_new else 0.0

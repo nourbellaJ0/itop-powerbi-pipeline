@@ -211,6 +211,56 @@ class TestCache:
         assert stats2["n_api_calls"] == 0
         assert stats2["n_cache_hit"] == 1
 
+    def test_cache_persisted_incrementally_survives_mid_run_crash(self, tmp_path, monkeypatch):
+        """Regression test for a real CI incident: a GitHub Actions job hit
+        its 30-minute timeout mid-classification and was killed. Because the
+        cache used to be saved only once, after the full loop, all batches
+        already classified in that run were lost — the next run started from
+        zero again. The cache must now be flushed to disk after every batch,
+        so a crash after N batches still leaves those N batches' results on
+        disk for the next run to pick up."""
+        _isolate_cache(monkeypatch, tmp_path)
+
+        def fake_chat_json(self, system_prompt, user_prompt, temperature=0.0):
+            n_items = len(re.findall(r"^\d+\. ", user_prompt, flags=re.MULTILINE))
+            return {"resultats": [
+                {"categorie": "Saturation ressources (CPU/RAM/DB)", "confiance": 0.9, "resume": "ok"}
+                for _ in range(n_items)
+            ]}
+
+        monkeypatch.setattr(GroqClient, "chat_json", fake_chat_json)
+
+        # ai_batch_size=1 -> chaque ticket est son propre lot ; on "tue" le
+        # run juste après le 2e lot pour simuler un job coupé en plein vol.
+        cfg = _make_cfg(ai_batch_size=1)
+        df = _make_df(4)
+
+        original_classify_batch = ai_enrichment._classify_batch
+        call_count = {"n": 0}
+
+        def crashing_classify_batch(client, texts):
+            call_count["n"] += 1
+            if call_count["n"] > 2:
+                raise RuntimeError("Simulated job kill (CI timeout)")
+            return original_classify_batch(client, texts)
+
+        monkeypatch.setattr(ai_enrichment, "_classify_batch", crashing_classify_batch)
+
+        with pytest.raises(RuntimeError, match="Simulated job kill"):
+            enrich_dataframe(df, cfg)
+
+        # Les 2 lots traités avant le crash doivent déjà être sur disque,
+        # pas seulement en mémoire dans la fonction qui vient de planter.
+        cache_on_disk = ai_enrichment._load_cache()
+        assert len(cache_on_disk) == 2
+
+        # Un nouveau run repart avec ces 2 entrées déjà en cache (0 appel
+        # réseau les concernant) plutôt que de tout reclassifier depuis zéro.
+        monkeypatch.setattr(ai_enrichment, "_classify_batch", original_classify_batch)
+        _, stats2 = enrich_dataframe(df, cfg)
+        assert stats2["n_cache_hit"] == 2
+        assert stats2["n_api_calls"] == 2  # seulement les 2 tickets restants
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 4. Réponse JSON invalide / catégorie hors liste → fallback Indéterminé

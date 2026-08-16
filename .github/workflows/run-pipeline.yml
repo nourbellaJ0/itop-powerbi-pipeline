@@ -69,9 +69,15 @@ jobs:
         # persistant, chaque run repart d'une VM vierge et reclassifie TOUS
         # les tickets via Groq, ce qui mange le rate-limit (429 en rafale)
         # et peut faire dépasser le timeout du job. restore-keys prend la
-        # dernière sauvegarde disponible ; une clé unique par run garantit
-        # qu'on resauvegarde à la fin avec les nouvelles entrées.
-        uses: actions/cache@v4
+        # dernière sauvegarde disponible.
+        #
+        # restore + save séparés (pas actions/cache@v4 combiné) : le post-hook
+        # de sauvegarde automatique de l'action combinée est sauté quand le
+        # job est tué pour timeout (constaté en pratique : "Post Restore..."
+        # apparaît "skipped"). Un step explicite avec if: always() ci-dessous
+        # s'exécute lui bien même dans ce cas — même mécanisme que le step
+        # "Upload run logs" qui survit déjà au timeout.
+        uses: actions/cache/restore@v4
         with:
           path: cache/ai_classifications.json
           key: ai-classifications-${{ github.run_id }}
@@ -145,6 +151,17 @@ jobs:
           echo "Déclencheur : ${{ github.event_name }}"
           echo "Running: python main.py $ARGS"
           python main.py $ARGS
+
+      - name: Save AI classification cache
+        # if: always() — doit tourner même si le step précédent a été
+        # cancel/timeout, sinon tout le travail de classification déjà fait
+        # en mémoire/disque (voir ai_enrichment.py : sauvegarde incrémentale
+        # après chaque lot) est perdu pour le prochain run.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: cache/ai_classifications.json
+          key: ai-classifications-${{ github.run_id }}
 
       - name: Upload run logs
         if: always()

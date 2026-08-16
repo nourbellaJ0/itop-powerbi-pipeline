@@ -531,8 +531,9 @@ def classify_monetique(
         results = _classify_monetique_batch(client, b_texts)
         stats["n_api_calls"] += 1
 
+        batch_updates: dict[str, dict] = {}
         for idx, text, reference, result in zip(b_idx, b_texts, b_refs, results):
-            cache_updates[reference] = {
+            batch_updates[reference] = {
                 "macro_category": result["macro_category"],
                 "theme": result["theme"],
                 "responsabilite": result["responsabilite"],
@@ -544,11 +545,13 @@ def classify_monetique(
             _record(idx, reference, result)
             stats["estimated_tokens"] += (len(text) + 200) // _CHARS_PER_TOKEN
 
-    if not dry_run and cache_updates:
-        for reference, result in cache_updates.items():
-            _set_cached_monetique_classification(cache, reference, result)
-        cache.update(cache_updates)
-        _save_monetique_cache(cache)
+        # Sauvegarde après CHAQUE lot — voir le commentaire équivalent dans
+        # ai_enrichment.py : un job CI tué sur timeout ne doit pas perdre le
+        # travail déjà classifié en mémoire.
+        if not dry_run and batch_updates:
+            cache_updates.update(batch_updates)
+            cache.update(batch_updates)
+            _save_monetique_cache(cache)
 
     n_new = len(to_call_idx)
     avg_tokens = (stats["estimated_tokens"] / n_new) if n_new else 0.0
