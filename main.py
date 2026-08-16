@@ -337,25 +337,18 @@ def _run_sharepoint_pipeline(cfg, args):
 # Pipeline principal
 # ──────────────────────────────────────────────────────────────────────────────
 
-def main() -> int:
-    global logger
-    run_start = datetime.now(timezone.utc).replace(tzinfo=None)
-    args      = parse_args()
+def _execute_pipeline(cfg, args: argparse.Namespace, run_start: datetime) -> int:
+    """
+    Corps du pipeline (extraction → transformation → export/dépôt).
 
-    logger.info("=" * 65)
-    logger.info("DEBUT DU PIPELINE iTop → Power BI")
-    logger.info(f"Heure UTC de démarrage : {run_start.isoformat()}")
-    logger.info("=" * 65)
+    Séparée de main() pour que celle-ci puisse envelopper cet appel dans un
+    try/except de haut niveau et écrire le statut d'exécution (En cours / OK /
+    Erreur) dans SharePoint même en cas d'exception non prévue.
 
-    # ── 1. Configuration ──────────────────────────────────────────────────────
-    try:
-        cfg = load_config()
-    except EnvironmentError as exc:
-        logger.critical(f"Erreur de configuration : {exc}")
-        return 1
-
-    logger = setup_logger(__name__, log_level=cfg.log_level)
-
+    Returns:
+        0 en cas de succès, 1 en cas d'échec (config, extraction, qualité,
+        export ou dépôt).
+    """
     input_mode  = args.input_mode  or cfg.input_mode
     output_mode = args.output_mode or cfg.output_mode
     legacy_flat = args.legacy_flat
@@ -536,6 +529,58 @@ def main() -> int:
     logger.info(f"PIPELINE TERMINE AVEC SUCCES en {elapsed:.1f}s")
     logger.info("=" * 65)
     return 0
+
+
+def main() -> int:
+    """
+    Point d'entrée. Charge la config, écrit le statut "En cours" dans
+    SharePoint, exécute le pipeline, puis écrit "OK" ou "Erreur" — y compris
+    si _execute_pipeline() lève une exception non prévue.
+
+    C'est ce qui garantit :
+    - un code de sortie non-zéro (donc un run GitHub Actions rouge) sur tout
+      échec, plutôt qu'un succès "vert" trompeur ;
+    - un statut visible pour l'utilisateur métier même quand la pipeline
+      plante, pas seulement quand elle échoue proprement.
+    """
+    global logger
+    run_start = datetime.now(timezone.utc).replace(tzinfo=None)
+    args      = parse_args()
+
+    logger.info("=" * 65)
+    logger.info("DEBUT DU PIPELINE iTop → Power BI")
+    logger.info(f"Heure UTC de démarrage : {run_start.isoformat()}")
+    logger.info("=" * 65)
+
+    # ── 1. Configuration ──────────────────────────────────────────────────────
+    try:
+        cfg = load_config()
+    except EnvironmentError as exc:
+        logger.critical(f"Erreur de configuration : {exc}")
+        return 1
+
+    logger = setup_logger(__name__, log_level=cfg.log_level)
+
+    from sharepoint_status import write_run_status
+
+    write_run_status(cfg, "En cours")
+
+    # ── 2-8. Exécution du pipeline, protégée par un filet de sécurité ────────
+    try:
+        exit_code = _execute_pipeline(cfg, args, run_start)
+    except Exception as exc:
+        logger.critical(f"Erreur non gérée du pipeline : {exc}", exc_info=True)
+        write_run_status(cfg, "Erreur", message=str(exc))
+        return 1
+
+    if exit_code == 0:
+        write_run_status(cfg, "OK")
+    else:
+        write_run_status(
+            cfg, "Erreur",
+            message="Le pipeline a échoué — voir les logs pour le détail.",
+        )
+    return exit_code
 
 
 if __name__ == "__main__":
